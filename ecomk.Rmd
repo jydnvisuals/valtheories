@@ -1,0 +1,452 @@
+---
+title: "ecomk"
+author: "Jayden Chrzanowski"
+date: "2023-01-08"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# THIS PDF IS A W.I.P
+
+```{r}
+# packages
+suppressMessages(suppressWarnings(library(tidyverse)))
+suppressMessages(suppressWarnings(library(valstats)))
+```
+
+```{r}
+# reading data
+valdf <- read_rib("vctpd.xlsx")
+list2env(valdf, .GlobalEnv)
+# NOTE: TRANSFORM METHODS INTO FUNCTIONS LATER
+```
+
+# Valorant Theories 1 - Are eco round wins a team effort?
+
+Does the "Hero Buy" exist?
+
+## Examining True Ecos
+
+```{r}
+# getting total eco rounds
+eco1 <- Rounds %>% filter(team1LoadoutTier == 1 & team2LoadoutTier > 2)
+eco2 <- Rounds %>% filter(team2LoadoutTier == 1 & team1LoadoutTier > 2)
+
+# getting eco round wins
+ecowin1 <- Rounds %>% filter(team1LoadoutTier == 1 & team2LoadoutTier > 2 
+                             & winningTeamId == teamOneId)
+ecowin2 <- Rounds %>% filter(team2LoadoutTier == 1 & team1LoadoutTier > 2 
+                             & winningTeamId == teamTwoId)
+
+# Checking if coded correctly
+#table(eco1$team1LoadoutTier, eco1$team2LoadoutTier)
+#table(eco2$team1LoadoutTier, eco2$team2LoadoutTier)
+
+#table(ecowin1$team1LoadoutTier, ecowin1$team2LoadoutTier)
+#table(ecowin2$team2LoadoutTier, ecowin2$team1LoadoutTier)
+
+# binding the data together
+eco <- bind_rows(eco1, eco2)
+ecowins <- bind_rows(ecowin1, ecowin2)
+
+#n_distinct(Rounds$roundId) #15056 total rounds
+#n_distinct(eco$roundId) # 1415 eco rounds
+#n_distinct(ecowins$roundId) # 131 eco round wins 
+
+# Getting IDs I need + making sure data is correct
+ecowins_ids <- ecowins %>% select(roundId, teamOneId, teamTwoId, 
+                              team1LoadoutTier, team2LoadoutTier, winningTeamId)
+#head(ecowins_ids, 10)
+```
+
+Across 15,056 VCT 2022 rounds, 1415 rounds (9.4%) are classified as eco
+rounds. We count a round as an eco round if one team's loadout is worth
+between 0-5k credits (Eco buy) and the enemy's loadout is worth more
+than 10k credits (Half- buy - Full-buy). We say this because data shows
+that the greatest increase in winrate occurs when a team's loadout is
+worth 10k+ credits more than the opponent
+(<https://twitter.com/ZukeStats/status/1574555496035815424?s=20>).
+
+Of those 1415 eco rounds, 131 (9.3%) were won by the team on the eco
+buy. We want to investigate if multikills are required for an eco win or
+if it is more of a team effort.
+
+We expect, from intuition, to have results in favor of multikills
+proving essential to winning ecos.
+
+```{r}
+# getting winning team ids to filter with other data set
+winners <- ecowins_ids %>% select(roundId, winningTeamId) %>%
+  slice(rep(1:n(), each = 10)) %>% arrange(roundId)
+#winners
+
+# filtering only eco win rounds
+RPS_ecowins <- RPS %>% filter(roundId %in% ecowins_ids$roundId) %>% 
+  arrange(roundId)
+# filtering only players who were on the team that won the eco]
+RPS_ecowins <- RPS_ecowins %>% filter(teamId == winners$winningTeamId)
+# checking # of rounds matches between data sets
+#n_distinct(RPS_ecowins$roundId) #131 rounds
+
+# filtering for multi-kills
+RPS_ecowins_filtered <- RPS_ecowins %>% filter(kills>=2)
+# checking # of rounds where a multi-kill occurred
+#n_distinct(RPS_ecowins_filtered$roundId) #128 rounds
+
+# Checking # of rounds where multiple multi-kills occurred on the same team
+dupes <- RPS_ecowins_filtered %>% 
+  filter(duplicated(RPS_ecowins_filtered$roundId)) %>%
+  arrange(roundId)
+#table(dupes$kills)
+# 40 rounds
+#table(RPS_ecowins_filtered$kills)
+```
+
+Out of the 131 eco rounds that were won, 128 of them (97.7%) involved at
+least one multi-kill from the winning team.
+
+105 (82.0%) of the 128 rounds involved a player achieving 2 kills and 63
+(49.2%) rounds with a player achieving 3 or more kills.
+
+Of the 128 rounds with at least one multi-kill, 88 (68.8%) of them only
+involved one multi-kill. So, 88 (67.2%) of all 131 eco round wins
+involved a single player achieving a multi-kill.
+
+35 out of 88 (39.8%) sole multi-kill players had 2 kills 53 out of 88
+(60.2%) sole multi-kill players had 3 or more kills
+
+In summary:
+
+-   97.7% (128/131) of eco round wins involved at least one multi-kill
+    from the team that won
+
+-   67.2% (88/131) of eco round wins involved only one player achieving
+    a multi-kill from the team that won
+
+-   40.5% (53/131) of eco round wins required a player to solely achieve
+    3 or more kills to win the round
+
+## Examining Light v Heavy Buys
+
+```{r}
+# getting total light rounds
+light1 <- Rounds %>% filter(team1LoadoutTier == 1 & team2LoadoutTier >= 3 | 
+                              team1LoadoutTier == 2 & team2LoadoutTier == 4)
+light2 <- Rounds %>% filter(team2LoadoutTier == 1 & team1LoadoutTier >= 2 |
+                              team2LoadoutTier == 2 & team1LoadoutTier == 4)
+
+# getting light round wins
+lightwin1 <- Rounds %>% filter(team1LoadoutTier == 1 & team2LoadoutTier >= 3 &
+                                 winningTeamId == teamOneId | 
+                              team1LoadoutTier == 2 & team2LoadoutTier == 4 &
+                                winningTeamId == teamOneId)
+lightwin2 <- Rounds %>% filter(team2LoadoutTier == 1 & team1LoadoutTier >= 2 &
+                                 winningTeamId == teamTwoId |
+                              team2LoadoutTier == 2 & team1LoadoutTier == 4 &
+                                winningTeamId == teamTwoId)
+
+# Checking if coded correctly
+#table(light1$team1LoadoutTier, light1$team2LoadoutTier)
+#table(light2$team1LoadoutTier, light2$team2LoadoutTier)
+
+#table(lightwin1$team1LoadoutTier, lightwin1$team2LoadoutTier)
+#table(lightwin2$team2LoadoutTier, lightwin2$team1LoadoutTier)
+
+# binding the data together
+light <- bind_rows(light1, light2)
+lightwins <- bind_rows(lightwin1, lightwin2)
+
+#n_distinct(light$roundId) # 3131 light v heavy rounds
+#n_distinct(lightwins$roundId) # 488 light v heavy round wins 
+
+# Getting IDs I need + making sure data is correct
+lightwins_ids <- lightwins %>% select(roundId, teamOneId, teamTwoId, 
+                              team1LoadoutTier, team2LoadoutTier, winningTeamId)
+#head(lightwins_ids, 10)
+```
+
+Across 15,056 VCT 2022 rounds, 3131 rounds (20.8%) are classified as
+light v heavy buy rounds. We count a round as a light v heavy round if
+one team's loadout is worth at least 10k more than the opposing team.
+Classified as eco-buy vs semi or full buy and semi-eco vs full buy.
+
+Of those 3131 eco rounds, 488 (15.6%) were won by the team on the light
+buy. We want to investigate if multikills are required for a light v
+heavy buy win or if it is more of a team effort.
+
+```{r}
+# getting winning team ids to filter with other data set
+lightwinners <- lightwins_ids %>% select(roundId, winningTeamId) %>%
+  slice(rep(1:n(), each = 10)) %>% arrange(roundId)
+#lightwinners
+
+# filtering only light win rounds
+RPS_lightwins <- RPS %>% filter(roundId %in% lightwins_ids$roundId) %>% 
+  arrange(roundId)
+# filtering only players who were on the team that won the eco]
+RPS_lightwins <- RPS_lightwins %>% filter(teamId == lightwinners$winningTeamId)
+# checking # of rounds matches between data sets
+#n_distinct(RPS_lightwins$roundId) #488 rounds
+
+# filtering for multi-kills
+RPS_lightwins_filtered <- RPS_lightwins %>% filter(kills>=2)
+# checking # of rounds where a multi-kill occurred
+#n_distinct(RPS_lightwins_filtered$roundId) #468 rounds
+
+# Checking # of rounds where multiple multi-kills occurred on the same team
+lightdupes <- RPS_lightwins_filtered %>% 
+  filter(duplicated(RPS_lightwins_filtered$roundId)) %>%
+  arrange(roundId)
+#table(lightdupes$kills)
+# 178 rounds
+#table(RPS_lightwins_filtered$kills)
+```
+
+Out of the 488 light rounds that were won, 468 of them (95.9%) involved
+at least one multi-kill from the winning team.
+
+432 (92.3%) of the 468 rounds involved a player achieving 2 kills and
+214 (45.7%) rounds with a player achieving 3 or more kills.
+
+Of the 468 rounds with at least one multi-kill, 290 (62.0%) of them only
+involved one multi-kill. So, 290 (59.4%) of all 488 light round wins
+involved a single player achieving a multi-kill.
+
+138 out of 290 (47.6%) sole multi-kill players had 2 kills 152 out of
+290 (52.4%) sole multi-kill players had 3 or more kills
+
+In summary:
+
+-   95.9% (468/488) of light round wins involved at least one multi-kill
+    from the team that won
+
+-   59.4% (290/488) of light round wins involved only one player
+    achieving a multikill from the team that won
+
+-   31.1% (152/488) of light round wins required a player to solely
+    achieve 3 or more kills to win the round
+
+## Generating Stats for Comparison
+
+To make sense of this data, we need to compare it to something else. How
+do these numbers look next to averages of traditional gun rounds? Do
+multikills have more of an effect in eco and light buy rounds or do they
+have the same effect as they do in even rounds?
+
+```{r}
+# getting gun rounds
+gun <- Rounds %>% filter(team1LoadoutTier >= 3 & team2LoadoutTier >= 3)
+
+# Checking if coded correctly
+#table(gun$team1LoadoutTier, gun$team2LoadoutTier)
+
+#n_distinct(gun$roundId) # 10297 gun rounds
+
+# Getting IDs I need + making sure data is correct
+gun_ids <- gun %>% select(roundId, teamOneId, teamTwoId, 
+                              team1LoadoutTier, team2LoadoutTier, winningTeamId)
+#head(gun_ids, 10)
+```
+
+Across 15,056 VCT 2022 rounds, 10,297 rounds (68.4%) are classified as
+gun rounds. We count a gun round if both team's loadouts are worth at
+least 10k.
+
+```{r}
+# getting winning team ids to filter with other data set
+gunwinners <- gun_ids %>% select(roundId, winningTeamId) %>%
+  slice(rep(1:n(), each = 10)) %>% arrange(roundId)
+#gunwinners
+
+# filtering only gun rounds
+RPS_gun <- RPS %>% filter(roundId %in% gun_ids$roundId) %>% 
+  arrange(roundId)
+# filtering only players who were on the team that won the round
+RPS_gunwins <- RPS_gun %>% filter(teamId == gunwinners$winningTeamId)
+# checking # of rounds matches between data sets
+#n_distinct(RPS_gunwins$roundId) #10297 rounds
+
+# filtering for multi-kills
+RPS_gunwins_filtered <- RPS_gunwins %>% filter(kills>=2)
+# checking # of rounds where a multi-kill occurred
+#n_distinct(RPS_gunwins_filtered$roundId) #9720 rounds
+
+# Checking # of rounds where multiple multi-kills occurred on the same team
+gundupes <- RPS_gunwins_filtered %>% 
+  filter(duplicated(RPS_gunwins_filtered$roundId)) %>%
+  arrange(roundId)
+#table(gundupes$kills)
+# 3611 rounds
+#table(RPS_gunwins_filtered$kills)
+```
+
+Out of the 10297 gun rounds, 9720 of them (94.4%) involved at least one
+multi-kill from the winning team.
+
+9311 (95.8%) of the 9720 rounds involved a player achieving 2 kills and
+3219 (33.1%) rounds with a player achieving 3 or more kills.
+
+Of the 9720 rounds with at least one multi-kill, 6109 (62.8%) only
+involved one multi-kill. So, 6109 (59.3%) of all 10297 gun rounds
+involved a single player achieving a multi-kill.
+
+3141 out of 6109 (51.4%) sole multi-kill players had 2 kills 2968 out of
+6109 (48.6%) sole multi-kill players had 3 or more kills
+
+In summary:
+
+-   94.4% (9720/10297) of gun round wins involved at least one multikill
+    from the team that won
+
+-   59.3% (6109/10297) of gun round wins involved only one player
+    achieving a multikill from the team that won
+
+-   28.8% (2968/10297) of gun round wins required a player to solely
+    achieve 3 or more kills to win the round
+
+Let's take a second to look back at the last result for the past 3
+analyses:
+
+-   40.5% (53/131) of eco round wins required a player to solely achieve
+    3 or more kills to win the round
+
+-   31.1% (152/488) of light round wins required a player to solely
+    achieve 3 or more kills to win the round
+
+-   28.8% (2968/10297) of gun round wins required a player to solely
+    achieve 3 or more kills to win the round
+
+These statistics vary the most between the analyses, but the pattern may
+also just be from the increasing sample size between groups. Let's do
+one more analysis on a comparison group, but with a smaller sample size:
+pistols.
+
+```{r}
+# getting pistol rounds
+pistol <- Rounds %>% filter(is.na(team1LoadoutTier) & is.na(team2LoadoutTier))
+
+# Checking if coded correctly
+#table(pistol$team1LoadoutTier, pistol$team2LoadoutTier)
+
+#n_distinct(pistol$roundId) # 1422 pistol rounds
+
+# Getting IDs I need + making sure data is correct
+pistol_ids <- pistol %>% select(roundId, teamOneId, teamTwoId, 
+                              team1LoadoutTier, team2LoadoutTier, winningTeamId)
+#head(pistol_ids, 10)
+```
+
+Across 15,056 VCT 2022 rounds, 1422 rounds (9.4%) are classified as
+pistol rounds.
+
+```{r}
+# getting winning team ids to filter with other data set
+pistolwinners <- pistol_ids %>% select(roundId, winningTeamId) %>%
+  slice(rep(1:n(), each = 10)) %>% arrange(roundId)
+#pistolwinners
+
+# filtering only gun rounds
+RPS_pistol <- RPS %>% filter(roundId %in% pistol_ids$roundId) %>% 
+  arrange(roundId)
+# filtering only players who were on the team that won the round
+RPS_pistolwins <- RPS_pistol %>% filter(teamId == pistolwinners$winningTeamId)
+# checking # of rounds matches between data sets
+#n_distinct(RPS_pistolwins$roundId) #1422 rounds
+
+# filtering for multi-kills
+RPS_pistolwins_filtered <- RPS_pistolwins %>% filter(kills>=2)
+# checking # of rounds where a multi-kill occurred
+#n_distinct(RPS_pistolwins_filtered$roundId) #1386 rounds
+
+# Checking # of rounds where multiple multi-kills occurred on the same team
+pistoldupes <- RPS_pistolwins_filtered %>% 
+  filter(duplicated(RPS_pistolwins_filtered$roundId)) %>%
+  arrange(roundId)
+#table(pistoldupes$kills)
+# 555 rounds
+#table(RPS_pistolwins_filtered$kills)
+```
+
+Out of the 1422 pistol rounds, 1386 of them (97.5%) involved at least
+one multi-kill from the winning team.
+
+1347 (97.2%) of the 1386 rounds involved a player achieving 2 kills and
+594 (42.8%) rounds with a player achieving 3 or more kills.
+
+Of the 1386 rounds with at least one multi-kill, 831 (60.0%) of them
+only involved one multi-kill. So, 831 (58.4%) of all 1422 pistol rounds
+involved a single player achieving a multi-kill.
+
+381 out of 831 (45.8%) sole multi-kill players had 2 kills 450 out of
+831 (54.2%) sole multi-kill players had 3 or more kills
+
+In summary:
+
+-   97.5% (1386/1422) of pistol round wins involved at least one
+    multikill from the team that won
+
+-   58.4% (831/1422) of pistol round wins involved only one player
+    achieving a multikill from the team that won
+
+-   31.6% (450/1422) of pistol round wins required a player to solely
+    achieve 3 or more kills to win the round
+
+## Analysis
+
+So:
+
+-   40.5% (53/131) of eco round wins required a player to solely achieve
+    3 or more kills to win the round
+
+-   31.1% (152/488) of light round wins required a player to solely
+    achieve 3 or more kills to win the round
+
+-   28.8% (2968/10297) of gun rounds required a player to solely achieve
+    3 or more kills to win the round
+
+-   31.6% (450/1422) of pistol rounds required a player to solely
+    achieve 3 or more kills to win the round
+
+8.9% more eco rounds were won by a player getting 3 or more kills than
+pistol rounds and 11.7% more than gun rounds. This data may indicate
+that an eco playstyle favoring a "hero buy" or ideas that set up a
+fragger to get kills leads to more eco wins.
+
+### 100T Eco
+
+Let's eye test this with the recent Red Bull Homeground Tournament. 100T
+used an interesting 2nd round eco strategy after losing a pistol.
+
+While 100T were dominant on their pistol rounds, when they did lose
+their pistol, they opted for a full stinger loadout for their eco. When
+they used this strategy, they won 3/5 rounds after losing the pistol
+with all 3 rounds involving at least one multi-kill and 2 of them saw a
+player achieve 3 kills in the round.
+
+While the game usually goes two wins to one loss after the first three
+rounds, teams who lose the pistol can take back the next round when
+another player pops off and gets a multikill. This is fairly rare when
+most teams opt out of buying after they lose the pistol. But, after
+seeing 100 Thieves' success with their stinger eco strategy, we may see
+a change in the way the first three rounds are played by pro teams,
+creating more variation in tournaments.
+
+### Conclusion
+
+So, are eco round wins the result of a "hero player" on the team or is
+it really a team effort? Although the data points towards the idea of a
+hero, it's much more complicated when considering how eco rounds are
+traditionally played. In recent tournaments, multikills have shown to be
+a factor in eco round success, but it does not appear that teams are
+purposefully setting a player up to pop off. To me, it looks as if teams
+like 100 Thieves are changing up the traditional pacing of the game and
+are taking more of these safe gambles to net an advantage over their
+opponent. Instead of putting the round in the hand of one player, each
+player on the team has the potential to be the hero because of the way
+they set up their eco rounds.
