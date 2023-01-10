@@ -418,6 +418,21 @@ pistol rounds and 11.7% more than gun rounds. This data may indicate
 that an eco playstyle favoring a "hero buy" or ideas that set up a
 fragger to get kills leads to more eco wins.
 
+Ideas on why 3+ kill rounds by a single player are more common in ecos
+than any other round type:
+
+-   Many teams opt out of buying after losing pistols. Players who get
+    the multikills typically get a weapon dropped by the enemy to
+    continue stacking their kills.
+
+-   Teams may feed a player a weapon as a "hero" buy enabling them to
+    pop off.
+
+-   Teams may approach an eco buy differently to enable any player to
+    achieve a multikill (Marshall, Stinger, Shorty). The players are set
+    up in a way to allow for a multikill from any player depending on
+    the engagement they get.
+
 ### 100T Eco
 
 Let's eye test this with the recent Red Bull Homeground Tournament. 100T
