@@ -465,3 +465,31 @@ are taking more of these safe gambles to net an advantage over their
 opponent. Instead of putting the round in the hand of one player, each
 player on the team has the potential to be the hero because of the way
 they set up their eco rounds.
+
+How often on an eco round does a first blood on the enemy team lead to
+them getting thriftied?
+
+```{r}
+eco1ids <- eco1 %>% select(matchId, teamOneId, winningTeamId)
+eco2ids <- eco2 %>% select(matchId, teamTwoId, winningTeamId)
+
+ecowinids <- ecowins %>% select(roundId, winningTeamId) %>% arrange(roundId)
+
+eco1ids
+
+
+eco2ids
+
+ecowinids
+
+fb_count <- Kills %>% arrange(roundId) %>% filter(roundId %in% ecowinids$roundId) %>% filter(killerTeamId == roundWinnerTeamId) %>% filter(first==T)
+
+k_count2 <- Kills %>% arrange(roundId) %>% filter(roundId %in% ecowinids$roundId) %>% filter(killerTeamId == roundWinnerTeamId) %>% filter(first==F) %>% filter(roundTimeMillis > 30000)
+table(fb_count$weapon)
+table(k_count2$weapon)
+
+k_count2
+n_distinct(k_count2$killId)
+
+90/131
+```
